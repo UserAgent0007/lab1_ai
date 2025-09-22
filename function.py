@@ -23,7 +23,7 @@ def net (image, grid_dim=6):
 
     for i in range (grid_dim):
 
-        draw.line ([(0, y), (width, y)], fill='blue', width=1)
+        draw.line ([(0, y), (width, y)], fill='red', width=1)
         y += step_y
 
 def calc_vector_sign (image, grid_dim = 6):
@@ -43,7 +43,7 @@ def calc_vector_sign (image, grid_dim = 6):
 
     while iterator <= grid_dim ** 2:
 
-        # black_pixels = 0
+        black_pixels = 0 # changes
         white_pixel = 0
         
         for i in range (y, y + step_y ): # j - x
@@ -66,12 +66,29 @@ def calc_vector_sign (image, grid_dim = 6):
                 
                 pixel = pixels[j,i]
 
-                if (pixel != 0):
+                # changes
 
-                    white_pixel+=1
+                if (isinstance(pixel, tuple)):
+
+                    r, g, b = pixels[j, i] 
+
+                    if r == 0 and g == 0 and b == 0:
+
+                        black_pixels += 1
+
+                else:
+                    if (pixel >128):
+                    
+
+                        white_pixel+=1
         
-        # vector.append (black_pixels)
-        vector.append(white_pixel)
+        if (white_pixel == 0):
+
+            vector.append (black_pixels)
+            
+        else:
+
+            vector.append(white_pixel)
 
         if (iterator % grid_dim == 0):
 
@@ -92,9 +109,13 @@ def calc_vector_sign (image, grid_dim = 6):
         
 def normalize (vector):
 
-    max_val = max(vector)
+    # max_val = max(vector)
 
-    return [round (value / max_val, 3) for value in vector]
+    # return [value / max_val for value in vector]
+
+    suma = sum (vector)
+    return [value / suma for value in vector]
+
 
 def  calcVectorSignForEtalon(etalon_image_list, grid_dim = 6):
 
@@ -142,7 +163,7 @@ def draw_elements(grid_dim = 6):
     for i, image in enumerate(etalon_files):
         
         etalon_bytes = image.read()
-        etalon_image = Image.open (io.BytesIO(etalon_bytes))
+        etalon_image = Image.open(io.BytesIO(etalon_bytes))
 
         etalon_image_list.append(etalon_image)
 

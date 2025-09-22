@@ -5,11 +5,6 @@ import streamlit as st
 from function import *
 st.write ('lab-1')
 
-
-
-
-
-
 try:
     
 
