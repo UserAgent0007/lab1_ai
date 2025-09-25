@@ -27,8 +27,9 @@ def net (image, grid_dim=6):
         y += step_y
 
 def calc_vector_sign (image, grid_dim = 6):
-
+    
     pixels = image.load()
+    
     width, height = image.size
 
     step_x = ceil(width / grid_dim)
@@ -40,6 +41,8 @@ def calc_vector_sign (image, grid_dim = 6):
     vector = []
     
     iterator = 1
+
+    
 
     while iterator <= grid_dim ** 2:
 
@@ -124,9 +127,11 @@ def  calcVectorSignForEtalon(etalon_image_list, grid_dim = 6):
     for image_ in etalon_image_list:
 
         vector_sign = calc_vector_sign (image_, grid_dim)
+        
         vector_sign = normalize (vector_sign)
 
         result_list.append (vector_sign)
+
 
     return result_list
 
@@ -149,41 +154,102 @@ def classification(etalon_lists, vector_sign):
     
     return (index, min_elem)
 
-def draw_elements(grid_dim = 6):
+def create_etalon_group ( etalon_image_list, grid_dim = 6):
+
+    if len(etalon_image_list) == 0:
+
+        return []
 
     
-    # завантаження і показ еталонних зображень ================================================================================
+
+    conv_etalon_list = []
+
+    for i, image in enumerate(etalon_image_list):
+        
+        image.seek(0)
+        etalon_bytes = image.read()
+        
+        etalon_image = Image.open (io.BytesIO(etalon_bytes))
+
+        conv_etalon_list.append(etalon_image)
+
+    calculated_etalon_lists = calcVectorSignForEtalon(conv_etalon_list, grid_dim)
+
+    
+
+    etalon_group = np.mean(calculated_etalon_lists, axis=0)
+
+    return etalon_group
+
+def draw_etalon (file):
 
     all_columns = st.columns(3)
-
-    etalon_files = st.file_uploader ("Pick a files", type=["BMP"],  accept_multiple_files=True)
-
-    etalon_image_list = []
-
-    for i, image in enumerate(etalon_files):
+    for i, image in enumerate(file):
         
         etalon_bytes = image.read()
         etalon_image = Image.open(io.BytesIO(etalon_bytes))
 
-        etalon_image_list.append(etalon_image)
+        
 
         with all_columns[i % 3]:
 
             st.image (etalon_image, caption=f"{i + 1} etalon image")
+
+
+def draw_elements(grid_dim = 6):
+
+    if "uploaders" not in st.session_state:
+        st.session_state.uploaders = {0: []}  # {індекс: список файлів}
+
+    indices = sorted(st.session_state.uploaders.keys())
+    for i in indices:
+        files = st.file_uploader(
+            f"Файли категорії {i+1}",
+            type=["bmp"],
+            key=f"uploader_{i}",
+            accept_multiple_files=True
+        )
+
+        draw_etalon(files)
+
+        # Оновлюємо значення
+        st.session_state.uploaders[i] = files or []
+
+        # Якщо у цьому uploader зʼявився файл і ще немає наступного поля → додаємо і робимо rerun
+        if files and (i + 1) not in st.session_state.uploaders:
+            st.session_state.uploaders[i + 1] = []
+            st.rerun()
+
+    # --- Логіка очищення ---
+    uploaded_file = st.file_uploader ("Pick a file", type=["BMP"], key="main_image")
+    empty_keys = [k for k, v in st.session_state.uploaders.items() if not v]
+    if len(empty_keys) > 1:
+        for k in empty_keys[:-1]:
+            del st.session_state.uploaders[k]
+        st.rerun()
     
-    etalonResults = calcVectorSignForEtalon(etalon_image_list, grid_dim) ### Важлива змінна з еталонами нормалізованими ###
+    list_keys = list(st.session_state.uploaders.keys())
+    
+    etalonResults = []
+    
+    for i in range(len(list_keys)):
+        
+        
+        group_etalon = create_etalon_group(st.session_state.uploaders[i], grid_dim)
+
+
+        if len(group_etalon) != 0:
+            etalonResults.append(group_etalon)
+
 
     st.session_state["etalonResults"] = copy.deepcopy(etalonResults)
 
-    for i, elem in enumerate(etalonResults):
 
-        with all_columns[i % 3]:
-
-            st.write (np.array(elem).reshape(grid_dim, grid_dim))
+    # завантаження і показ еталонних зображень ================================================================================
     
     # Робота з головною фотографією ================================================================================
 
-    uploaded_file = st.file_uploader ("Pick a file", type=["BMP"])
+
     image_bytes = uploaded_file.read()
 
     orig_image = Image.open (io.BytesIO(image_bytes))
@@ -240,71 +306,9 @@ def draw_elements(grid_dim = 6):
 
             resultClasification = classification(st.session_state["etalonResults"], st.session_state["vector_sign_norm"])
 
-            st.write(f"image is similar to the {resultClasification[0]+1} image with counted similarity\n{resultClasification[1]}")
+            st.write(f"image is similar to the {list_keys[resultClasification[0]] + 1} image with counted similarity\n{resultClasification[1]}")
 
             st.session_state.pop("etalonResults", None)
             st.session_state.pop("vector_sign_norm", None)
 
 
-# def draw_elements(grid_dim=6):
-
-#     # 1. Еталонні зображення ========================================================================================
-#     all_columns = st.columns(3)
-
-#     etalon_files = st.file_uploader("Pick a files", type=["BMP"], accept_multiple_files=True)
-
-#     etalon_image_list = []
-
-#     for i, image in enumerate(etalon_files):
-#         etalon_bytes = image.read()
-#         etalon_image = Image.open(io.BytesIO(etalon_bytes))
-#         etalon_image_list.append(etalon_image)
-
-#         with all_columns[i % 3]:
-#             st.image(etalon_image, caption=f"{i + 1} etalon image")
-
-#     if etalon_image_list:
-#         st.session_state["etalonResults"] = calcVectorSignForEtalon(etalon_image_list)
-
-#         for i, elem in enumerate(st.session_state["etalonResults"]):
-#             with all_columns[i % 3]:
-#                 st.write(np.array(elem).reshape(grid_dim, grid_dim))
-
-#     # 2. Завантаження головної картинки ==============================================================================
-#     uploaded_file = st.file_uploader("Pick a file", type=["BMP"])
-#     if uploaded_file:
-#         image_bytes = uploaded_file.read()
-#         orig_image = Image.open(io.BytesIO(image_bytes))
-#         image = Image.open(io.BytesIO(image_bytes))
-
-#         net(image, grid_dim)
-#         st.image(image, caption="uploaded Image", use_column_width=True)
-
-#         col1, col2 = st.columns(2)
-
-#         # Вектор ознак
-#         with col1:
-#             if st.button("Calculate vector", type="primary"):
-#                 st.session_state["vector_sign"] = calc_vector_sign(orig_image, grid_dim)
-#                 st.write(np.array(st.session_state["vector_sign"]).reshape(grid_dim, grid_dim))
-
-#         # Нормалізація
-#         with col2:
-#             if st.button("Normalize"):
-#                 if "vector_sign" not in st.session_state:
-#                     st.session_state["vector_sign"] = calc_vector_sign(orig_image, grid_dim)
-#                     col1.write(np.array(st.session_state["vector_sign"]).reshape(grid_dim, grid_dim))
-
-#                 st.session_state["vector_sign_norm"] = normalize(st.session_state["vector_sign"])
-                # st.write(np.array(st.session_state["vector_sign_norm"]).reshape(grid_dim, grid_dim))
-
-#         # 3. Класифікація ==========================================================================================
-#         if st.button("Classificate"):
-#             if "etalonResults" in st.session_state and "vector_sign_norm" in st.session_state:
-#                 resultClasification = classification(
-#                     st.session_state["etalonResults"], st.session_state["vector_sign_norm"]
-#                 )
-#                 st.write(
-#                     f"Image is similar to the {resultClasification[0]+1} image "
-#                     f"with counted similarity\n{resultClasification[1]}"
-#                 )
