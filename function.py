@@ -122,24 +122,58 @@ def calcVectorSignForEtalon(etalon_image_list, grid_dim=6):
     return result_list
 
 
-def classification(etalon_lists, vector_sign):
+def classification_perzeptron(weight_vector, vector_sign):
 
-    index = -1
-    min_elem = -1
+    predict = np.sum(vector_sign*weight_vector)
 
-    for i, list_ in enumerate(etalon_lists):
+    if predict >= 0:
 
-        res = sum([(vector_sign[j] - list_[j]) ** 2 for j in range(len(list_))])
-        res = res**0.5
+        return 1
+                
+    else:
 
-        st.write(res)
+        return 2
 
-        if index == -1 or res < min_elem:
 
-            index = i
-            min_elem = res
-    return (index, min_elem)
+def check_error(prediction, correct_variant, array, weight_array):
 
+    if prediction == correct_variant:
+
+        return (weight_array, False)
+    
+    weight_array = weight_array + 0.1 * (correct_variant - prediction) * array
+
+    return (weight_array, True)
+
+def createWeightVector(classDict : dict, grid_dim):
+
+    weight = np.random.rand(grid_dim**2)
+    flag = True
+
+    while flag:
+
+        flag = False
+
+        for class_, all_vectors in classDict.items():
+
+            for vector in all_vectors:
+
+                predict = np.sum(vector*weight)
+
+                if predict >= 0:
+
+                    predict = 1
+                
+                else:
+
+                    predict = -1
+
+                weight, check_result = check_error(predict, class_, vector, weight)
+
+                if check_result:
+
+                    flag = True
+    return weight
 
 def create_etalon_group(etalon_image_list, grid_dim=6):
 
@@ -158,9 +192,9 @@ def create_etalon_group(etalon_image_list, grid_dim=6):
         conv_etalon_list.append(etalon_image)
     calculated_etalon_lists = calcVectorSignForEtalon(conv_etalon_list, grid_dim)
 
-    etalon_group = np.mean(calculated_etalon_lists, axis=0)
+    # etalon_group = np.mean(calculated_etalon_lists, axis=0)
 
-    return etalon_group
+    return calculated_etalon_lists
 
 
 def draw_etalon(file):
@@ -180,6 +214,7 @@ def draw_elements(grid_dim=6):
 
     if "uploaders" not in st.session_state:
         st.session_state.uploaders = {0: []}  # {індекс: список файлів}
+
     indices = sorted(st.session_state.uploaders.keys())
     for i in indices:
         files = st.file_uploader(
@@ -210,15 +245,31 @@ def draw_elements(grid_dim=6):
         st.rerun()
     list_keys = list(st.session_state.uploaders.keys())
 
-    etalonResults = []
+    # etalonResults = []
+
+    # створення масиву вагових коефіцієнтів
+
+    etalon_vectors = {}
+    class_ = 1
 
     for i in range(len(list_keys)):
 
-        group_etalon = create_etalon_group(st.session_state.uploaders[i], grid_dim)
+        group_etalon = create_etalon_group(st.session_state.uploaders[list_keys[i]], grid_dim)
+        group_etalon = np.array(group_etalon)
 
         if len(group_etalon) != 0:
-            etalonResults.append(group_etalon)
-    st.session_state["etalonResults"] = copy.deepcopy(etalonResults)
+            # etalonResults.append(group_etalon)
+
+            etalon_vectors[class_] = group_etalon
+            class_ *= -1
+
+    if (len(etalon_vectors) == 2):
+
+        vector_weight = createWeightVector(etalon_vectors, grid_dim)
+    
+        # print(vector)
+
+        st.session_state["vectorWeight"] = copy.deepcopy(vector_weight)
 
     # завантаження і показ еталонних зображень ================================================================================
 
@@ -279,18 +330,16 @@ def draw_elements(grid_dim=6):
         # if len(etalonResults) != 0 and len(vector_sign_norm) != 0:
 
         if (
-            "etalonResults" in st.session_state
+            "vectorWeight" in st.session_state
             and "vector_sign_norm" in st.session_state
         ):
-            # resultClasification = classification(etalonResults, vector_sign_norm)
-
-            resultClasification = classification(
-                st.session_state["etalonResults"], st.session_state["vector_sign_norm"]
+            resultClasification = classification_perzeptron(
+                st.session_state["vectorWeight"], st.session_state["vector_sign_norm"]
             )
 
             st.write(
-                f"image is similar to the {list_keys[resultClasification[0]] + 1} image with counted similarity\n{resultClasification[1]}"
+                f"image is similar to the {resultClasification} class"
             )
 
-            st.session_state.pop("etalonResults", None)
+            st.session_state.pop("vectorWeight", None)
             st.session_state.pop("vector_sign_norm", None)
