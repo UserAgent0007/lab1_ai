@@ -5,12 +5,10 @@ import streamlit as st
 from function import *
 st.write ('lab-1')
 
-uploaded_file = st.file_uploader ("Pick a file", type=["BMP"])
-
 try:
-    image_bytes = uploaded_file.read()
+    
 
-    draw_elements (image_bytes)
+    draw_elements (grid_dim=5)
 
 except AttributeError:
 
