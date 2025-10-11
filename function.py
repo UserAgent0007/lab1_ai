@@ -1,9 +1,10 @@
-from PIL import Image, ImageDraw
-import streamlit as st
 import io
 from math import ceil
-import numpy as np
 import copy
+
+from PIL import Image, ImageDraw
+import streamlit as st
+import numpy as np
 
 
 def net(image, grid_dim=6):
