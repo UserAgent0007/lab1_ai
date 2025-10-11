@@ -127,36 +127,40 @@ def calcVectorSignForEtalon(etalon_image_list, grid_dim=6):
 
 def classification(weight_matrix, vector_sign):
 
-    flag = True
-
     iterations = 0
-    
-    while flag and iterations < 1000:
-        flag=False
 
-        for i in range (len(vector_sign)):
+    vector_sign = np.array(vector_sign)
 
-            result = np.dot(weight_matrix[i], vector_sign)
+    eps = 1 / len(weight_matrix) / 4
+    B = len(vector_sign) / 2
 
-            result = 1 if result > 0 else -1
+    vector_sign = vector_sign.reshape(-1, 1)
 
-            if result != vector_sign[i]:
+    y = np.dot(weight_matrix, vector_sign) + B
 
-                vector_sign[i] = result
-                flag = True
-        
+    y2 = y.copy()
+
+    while iterations < 1000:
+
+        sum_all = np.sum(y2)
+
+        S = y2 - eps * (sum_all - y2)
+
+        y_next = np.maximum(0.0, S)
+
+        if np.linalg.norm(y_next - y2) < eps or np.sum(y_next > 0) == 1:
+
+            y2 = y_next
+            break
+        y2 = y_next
+
         iterations += 1
-        
-    
-    if iterations >= 1000:
+    ind = np.argmax(y2)
 
-        return []
+    return ind
 
-    
 
-    return vector_sign.copy()   
-
-def make_binary (vector):
+def make_binary(vector):
 
     new_res = []
 
@@ -164,42 +168,31 @@ def make_binary (vector):
 
         if i >= 0.04:
             new_res.append(1)
-
         elif i < 0.04:
             new_res.append(-1)
-    
     return new_res
 
-def createWeightMatrix(classDict : dict, grid_dim):
+
+def createWeightMatrix(classDict: dict, grid_dim):
 
     vector_list = []
-    weight_matrix = np.zeros((grid_dim**2, grid_dim**2))
 
     for elem in classDict.values():
 
         for list_ in elem:
 
             vector_list.append(list_)
-    
+    vector_list = np.array(vector_list)
     M = len(vector_list)
+    weight_matrix = np.zeros((M, grid_dim**2))
 
-    for i in range(grid_dim**2):
+    for i in range(M):
 
         for j in range(grid_dim**2):
 
-            if (i == j):
-                weight_matrix[i,j] = 0
-                continue
-            
-            suma = 0
-            for k in range (M):
-                suma += vector_list[k][i] * vector_list[k][j]
-        
-            # suma /= M
-            weight_matrix[i,j] = suma
-    
+            weight_matrix[i, j] = vector_list[i, j] / 2
     return weight_matrix
-   
+
 
 def create_etalon_group(etalon_image_list, grid_dim):
 
@@ -240,7 +233,6 @@ def draw_elements(grid_dim=6):
 
     if "uploaders" not in st.session_state:
         st.session_state.uploaders = {0: []}  # {індекс: список файлів}
-
     indices = sorted(st.session_state.uploaders.keys())
     for i in indices:
         files = st.file_uploader(
@@ -276,27 +268,25 @@ def draw_elements(grid_dim=6):
     # створення масиву вагових коефіцієнтів
 
     etalon_vectors = {}
-    
-    print(list_keys)
+
+    # print(list_keys)
 
     for i in range(len(list_keys)):
 
-        group_etalon = create_etalon_group(st.session_state.uploaders[list_keys[i]], grid_dim)
+        group_etalon = create_etalon_group(
+            st.session_state.uploaders[list_keys[i]], grid_dim
+        )
         group_etalon = np.array(group_etalon)
 
         if len(group_etalon) != 0:
             # etalonResults.append(group_etalon)
 
             etalon_vectors[list_keys[i]] = group_etalon
+    # if (len(etalon_vectors) == 3):
 
-    
+    weight_matrix = createWeightMatrix(etalon_vectors, grid_dim)
 
-    if (len(etalon_vectors) == 3):
-
-        weight_matrix = createWeightMatrix(etalon_vectors, grid_dim)
-
-
-        st.session_state["weightMatrix"] = copy.deepcopy(weight_matrix)
+    st.session_state["weightMatrix"] = copy.deepcopy(weight_matrix)
 
     # завантаження і показ еталонних зображень ================================================================================
 
@@ -360,68 +350,38 @@ def draw_elements(grid_dim=6):
     if st.button("Classificate"):
 
         # if len(etalonResults) != 0 and len(vector_sign_norm) != 0:
-        
 
         if (
             "weightMatrix" in st.session_state
             and "vector_sign_norm" in st.session_state
         ):
-            
 
             resultClasification = classification(
-                st.session_state["weightMatrix"], st.session_state["vector_sign_norm"].copy()
+                st.session_state["weightMatrix"],
+                st.session_state["vector_sign_norm"].copy(),
             )
 
             # print(resultClasification)
+
             resultClasification = check_result(etalon_vectors, resultClasification)
 
-            
-            st.write(
-                f"image is similar to the {resultClasification + 1} class"
-            )
+            st.write(f"image is similar to the {resultClasification + 1} class")
 
             st.session_state.pop("weightMatrix", None)
             st.session_state.pop("vector_sign_norm", None)
 
-def check_result(all_examples : dict, result_class):
 
-    # print(result_class)
-    
-    # for i, matrix in all_examples.items():
+def check_result(all_examples: dict, result_class):
 
-    #     for array in matrix:
-            
-    #         # print(np.shape(array))
-    #         # print(np.shape(result_class))
-    #         # print('\n\n')
-
-    #         if (np.array_equal(array, result_class)):
-
-    #             return i
-
-    min_dist = float('inf')
-    best_class = None
-    
+    i = 0
     # Перетворення result_class на NumPy-масив для порівняння
-    result_class_np = np.array(result_class)
 
     for class_key, matrix in all_examples.items():
         # matrix містить еталонні вектори цього класу
-        for array in matrix:
-            # Обчислення відстані Хеммінга (кількість відмінностей)
-            # np.sum(array != result_class_np) працює для NumPy-масивів
-            dist = np.sum(array != result_class_np) 
 
-            
-            # print(best_class)
-            
-            if dist < min_dist:
-                min_dist = dist
-                best_class = class_key
-                
-    # Якщо мінімальна відстань дорівнює нулю, то співпадіння ідеальне.
-    # Навіть якщо dist > 0, ви повернете найближчий клас.
-    
-    print(best_class)
-    
-    return best_class
+        for array in matrix:
+
+            if i == result_class:
+
+                return class_key
+            i += 1
